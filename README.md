@@ -1,4 +1,5 @@
-## coq-lit.py: Literate Coq Blogging 
+coq-lit.py: Literate Coq Blogging 
+==================================
 
 This python script processes special commands inside comments in Coq
 source files to produce markdown and raw html that generates a blog
@@ -6,14 +7,16 @@ post. An example may be found
 [here](http://homes.cs.washington.edu/~jrw12/dep-destruct.html)
 ([source](http://homes.cs.washington.edu/~jrw12/dep-destruct.v)).
 
-## Dependencies 
+Dependencies
+-------------
 
 You'll need:
 * python 3.x
 * jQuery (tested with 2.1.1)
 * jQuery UI (tested with 1.11.1)
 
-## Commands
+Commands
+----------
 
 **Note: All commands must appear at the very beginning of a line. This
   includes comment-closing characters.**
