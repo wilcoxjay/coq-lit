@@ -1,10 +1,13 @@
 import sys
+import re
 
 def tangle(lines):
     pass
 
 
-sep = ["\n", " ", ".", ",", "(", ")", ":", "=", ";", "\""]
+sep = ["\n", " ", ".", ",", "(", ")", ":", "=", ";", "\"", "+", "-", "*", "{", "}", "[", "]"]
+
+binder_skip = ["\n", " ", ".", "(", ")", ";", "\"", "+", "-", "*", ">", "{", "}"]
 
 def tokenize(line):
     global sep
@@ -37,7 +40,14 @@ def highlight(line):
         "Theorem",
         "Lemma",
         "Example",
-        "Ltac"
+        "Ltac",
+        "Record",
+        "Variable",
+        "Section",
+        "End",
+        "Instance",
+        "Module",
+        "Context"
     ]
     vernacular_words = vernacular_binder + [
         "Proof",
@@ -47,11 +57,12 @@ def highlight(line):
         "Import",
         "Print",
         "Assumptions",
+
     ]
 
     local_binder = [
         "forall",
-        "fun"        
+        "fun"
     ]
 
     syntax_words = local_binder + [
@@ -66,7 +77,9 @@ def highlight(line):
         "end",
         "as",
         "in",
-        "return"
+        "return",
+        "using",
+        "let"
     ]
     no_fail_tactic_words = [
         "auto",
@@ -82,16 +95,39 @@ def highlight(line):
         "simpl",
         "apply",
         "dependent",
-        "destruction"
+        "destruction",
+        "firstorder",
+        "intuition",
+        "eauto",
+        "pattern",
+        "clear",
+        "induction",
+        "fold",
+        "erewrite",
+        "revert",
+        "eexists",
+        "eapply",
+        "exfalso",
+        "compute"
     ]
     fail_tactic_words = [
         "reflexivity",
-        "by"
+        "by",
+        "discriminate",
+        "congruence",
+        "solve"
+    ]
+    tactical_words = [
+        "try",
+        "repeat"
     ]
 
 
     def style_template(color, word):
         return "<span style='color:#" + color + "'>" + word + "</span>"
+
+    def is_tactical(word):
+        return word in tactical_words
 
     def is_vernacular(word):
         return word in vernacular_words
@@ -120,11 +156,13 @@ def highlight(line):
             return style_template(no_fail_tactic_color, word)
         elif is_fail_tactic(word):
             return style_template(fail_tactic_color, word)
+        elif is_tactical(word):
+            return style_template(vernacular_color, word)
         else:
             return word
 
     words = list(tokenize(line))
-    print(words, file=sys.stderr)
+    #print(words, file=sys.stderr)
     output = [word for word in words]
     i = 0
     while i < len(words):
@@ -139,10 +177,14 @@ def highlight(line):
             i = j
         if is_local_binder(word):
             j = i+1
-            while j < len(words) and words[j] in sep:
-                j += 1
-            if j < len(words):
-                output[j] = style_template(local_bound_color, words[j])
+            while j < len(words):
+                while j < len(words) and words[j] in binder_skip:
+                    j += 1
+                if j < len(words) and words[j] in [",", ":", "="]:
+                    break
+                if j < len(words):
+                    output[j] = style_template(local_bound_color, words[j])
+                    j += 1
             i = j
         i += 1
 
@@ -172,7 +214,7 @@ def unicodify(s):
         print(src, dst, file=sys.stderr)
         s = s.replace(src, dst)
     return s
-    
+
 
 def weave(lines):
     MARKDOWN = 1
@@ -193,51 +235,55 @@ def weave(lines):
     i = 0
     while i < len(lines):
         line = lines[i]
-        print(state, line, file=sys.stderr, end='')
+        #print(state, line, file=sys.stderr, end='')
 
         if line.startswith("(**"):
             state.append(MARKDOWN)
         elif line.startswith("*)") and state[-1] != CODE:
             if state[-1] == CONTEXT:
-                print("leaving context", file=sys.stderr)
-                print("</pre>\",\n            open: function (event, ui) {\n                ui.tooltip.css('max-width', 'none');\n            }\n        });\n});\n</script>", end='')
+                #print("leaving context", file=sys.stderr)
+                print("</code></pre>\",\n            open: function (event, ui) {\n                ui.tooltip.css('max-width', 'none');\n                ui.tooltip.css('min-width', '800px');\n            }\n        });\n});\n</script>", end='')
                 state[-1] = USE_CONTEXT
                 print("<span title='tooltip' id='context-" + str(current_context-1) + "'>", end='')
             else:
                 state.pop()
         elif line.startswith("(*begin code"):
             state.append(CODE)
-            print("\n<pre><code>", end='')
+            print("<pre><code>", end='')
         elif line.startswith("(*end code") or line.startswith("end code*)"):
-            print(state[-1], file=sys.stderr)
+            #print(state[-1], file=sys.stderr)
             assert state[-1] == CODE
             state.pop()
-            print("</code></pre>")
+            print("</code></pre>", end='')
         elif line.startswith("(*raw"):
             state.append(RAW)
         elif line.startswith("(*context"):
             if state[-1] == USE_CONTEXT:
                 end_use_context()
             state.append(CONTEXT)
-            print("entering context", file=sys.stderr)
+            #print("entering context", file=sys.stderr)
             print("<script>\n$(function () {\n    $(\"#context-" + str(current_context) +
-                  "\").tooltip({\n            content: \"<pre>", end='')
+                  "\").tooltip({\n            content: \"<pre><code>", end='')
             current_context += 1
         elif line.startswith("(*") and state[-1] != CODE:
             state.append(state[-1])
-        elif state[-1] != SKIP:
-            if state[-1] == CODE or state[-1] == USE_CONTEXT:
-                out = "".join(highlight(line))
-                out = unicodify(out)
-                print("    ", out, end='', sep='')
-                if state[-1] == USE_CONTEXT:
-                    end_use_context()
-            elif state[-1] == CONTEXT:
-                out = "".join(highlight(line))
-                out = escape(unicodify(out))
-                print(out, end='')
-            else:
-                print(line, end='')
+
+        else:
+            if re.match(r"\s*\*\)", line):
+                print("WARNING: line contains closing comment with only whitespace preceding it on line. possible syntax error\n", line, file=sys.stderr)
+            if state[-1] != SKIP:
+                if state[-1] == CODE or state[-1] == USE_CONTEXT:
+                    out = "".join(highlight(line))
+                    out = unicodify(out)
+                    print("    ", out, end='', sep='')
+                    if state[-1] == USE_CONTEXT:
+                        end_use_context()
+                elif state[-1] == CONTEXT:
+                    out = "".join(highlight(line))
+                    out = escape(unicodify(out))
+                    print(out, end='')
+                else:
+                    print(line, end='')
         i += 1
 
 
