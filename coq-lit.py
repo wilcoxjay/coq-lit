@@ -1,3 +1,4 @@
+# This Python file uses the following encoding: utf-8
 import sys
 import re
 
@@ -62,7 +63,7 @@ def highlight(line):
 
     local_binder = [
         "forall",
-        "fun"
+        "fun"        
     ]
 
     syntax_words = local_binder + [
@@ -105,7 +106,7 @@ def highlight(line):
         "fold",
         "erewrite",
         "revert",
-        "eexists",
+        "eexists", 
         "eapply",
         "exfalso",
         "compute"
@@ -114,7 +115,7 @@ def highlight(line):
         "reflexivity",
         "by",
         "discriminate",
-        "congruence",
+        "congruence", 
         "solve"
     ]
     tactical_words = [
@@ -177,10 +178,10 @@ def highlight(line):
             i = j
         if is_local_binder(word):
             j = i+1
-            while j < len(words):
+            while j < len(words): 
                 while j < len(words) and words[j] in binder_skip:
                     j += 1
-                if j < len(words) and words[j] in [",", ":", "="]:
+                if j < len(words) and words[j] in [",", ":", "="]: 
                     break
                 if j < len(words):
                     output[j] = style_template(local_bound_color, words[j])
@@ -190,19 +191,35 @@ def highlight(line):
 
     return output
 
-def escape(s):
+#         elif c == "<":
+#             out += "&lt;"
+#         elif c == ">":
+#             out += "&gt;"
+
+
+def escape(m, s):
     assert type(s) == type("")
     out = []
     for c in s:
-        if c == "\\":
-            out += "\\\\"
-        elif c == "\n":
-            out += "\\n"
-        elif c == "\"":
-            out += "\\\""
+        if c in m:
+            out += m[c]
         else:
             out += c
     return "".join(out)
+
+
+def escape_html(s):
+    return escape({"<": "&lt;",
+                   ">": "&gt;",
+                   "&": "&amp;"}, s)
+
+
+
+
+def escape_context(s):
+    return escape({"\\": "\\\\",
+                   "\n": "\\n",
+                   "\"": "\\\""}, s)
 
 def unicodify(s):
     assert type(s) == type("")
@@ -214,7 +231,7 @@ def unicodify(s):
         print(src, dst, file=sys.stderr)
         s = s.replace(src, dst)
     return s
-
+    
 
 def weave(lines):
     MARKDOWN = 1
@@ -232,6 +249,8 @@ def weave(lines):
         print("</span>", end='')
         state.pop()
 
+    scripts = []
+
     i = 0
     while i < len(lines):
         line = lines[i]
@@ -242,7 +261,7 @@ def weave(lines):
         elif line.startswith("*)") and state[-1] != CODE:
             if state[-1] == CONTEXT:
                 #print("leaving context", file=sys.stderr)
-                print("</code></pre>\",\n            open: function (event, ui) {\n                ui.tooltip.css('max-width', 'none');\n                ui.tooltip.css('min-width', '800px');\n            }\n        });\n});\n</script>", end='')
+                scripts.append("</code></pre>\",\n            open: function (event, ui) {\n                ui.tooltip.css('max-width', 'none');\n                ui.tooltip.css('min-width', '800px');\n            }\n        });\n});\n</script>")
                 state[-1] = USE_CONTEXT
                 print("<span title='tooltip' id='context-" + str(current_context-1) + "'>", end='')
             else:
@@ -262,8 +281,8 @@ def weave(lines):
                 end_use_context()
             state.append(CONTEXT)
             #print("entering context", file=sys.stderr)
-            print("<script>\n$(function () {\n    $(\"#context-" + str(current_context) +
-                  "\").tooltip({\n            content: \"<pre><code>", end='')
+            scripts.append("<script type='text/javascript'>\n$(function () {\n    $(\"#context-" + str(current_context) +
+                  "\").tooltip({\n            content: \"<pre><code>")
             current_context += 1
         elif line.startswith("(*") and state[-1] != CODE:
             state.append(state[-1])
@@ -273,18 +292,19 @@ def weave(lines):
                 print("WARNING: line contains closing comment with only whitespace preceding it on line. possible syntax error\n", line, file=sys.stderr)
             if state[-1] != SKIP:
                 if state[-1] == CODE or state[-1] == USE_CONTEXT:
-                    out = "".join(highlight(line))
+                    out = "".join(highlight(escape_html(line)))
                     out = unicodify(out)
                     print("    ", out, end='', sep='')
                     if state[-1] == USE_CONTEXT:
                         end_use_context()
                 elif state[-1] == CONTEXT:
                     out = "".join(highlight(line))
-                    out = escape(unicodify(out))
-                    print(out, end='')
+                    out = escape_context(unicodify(out))
+                    scripts.append(out)
                 else:
                     print(line, end='')
         i += 1
+    print("".join(scripts))
 
 
 def usage():
